@@ -82,7 +82,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .mhead button{padding:6px 12px;color:var(--sub)}
 .mhead button:disabled{opacity:.25}
 .kv{display:flex;justify-content:space-between;align-items:center;padding:8px 2px;font-variant-numeric:tabular-nums}
-.kv .who{display:flex;align-items:center;gap:8px}
+.kv .who{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.kv .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv .amt{display:flex;flex-direction:column;align-items:flex-end;flex:none;margin-left:10px}
 .kv .av{width:30px;height:30px;font-size:13px}
 .kv.big{font-size:22px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px}
 .bar{height:6px;border-radius:3px;background:var(--accent);opacity:.7;margin:2px 2px 8px}
@@ -285,7 +287,7 @@ function renderMonth(){
   // 負担した額＝払った額 − 相手に返してもらう額 ＋ 相手に返す額（端数は一覧の計算と同じ）
   const share=k=>ps.reduce((t,p)=>{const o=owe(p);return t+(p.payer===k?p.amount-o.v:o.v)},0);
   $('mSum').innerHTML=`<div class="kv big"><span>合計</span><span>${yen(total)}</span></div>`+
-    ['A','B'].map(k=>`<div class="kv"><span class="who">${av(k)}${esc(nm(k))}</span><span><small class="muted">払った </small>${yen(paid(k))}<small class="muted">　負担 </small>${yen(share(k))}</span></div>`).join('')+
+    ['A','B'].map(k=>`<div class="kv"><span class="who">${av(k)}<span class="nm">${esc(nm(k))}</span></span><span class="amt"><span><small class="muted">払った </small>${yen(paid(k))}</span><span><small class="muted">負担 </small>${yen(share(k))}</span></span></div>`).join('')+
     `<div class="setsum" style="margin-top:8px"><small>この月の分だけで見ると</small>${flowHtml(net(ps))}</div>`;
   const cat={};ps.forEach(p=>{const t=p.title||'（費用名なし）';cat[t]=(cat[t]||0)+p.amount});
   const cs=Object.entries(cat).sort((a,b)=>b[1]-a[1]);
