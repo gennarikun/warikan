@@ -74,6 +74,29 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .modal .box p{margin:0 0 16px;line-height:1.6}
 .icon{width:26px;height:26px;fill:currentColor}
 .hidden{display:none!important}
+.setsum{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:2px 0 6px;font-size:16px}
+.setsum .av{width:28px;height:28px;font-size:13px}
+.setsum small{color:var(--sub);font-size:13px}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px}
+.mhead b{font-size:19px;font-weight:600}
+.mhead button{padding:6px 12px;color:var(--sub)}
+.mhead button:disabled{opacity:.25}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:8px 2px;font-variant-numeric:tabular-nums}
+.kv .who{display:flex;align-items:center;gap:8px}
+.kv .av{width:30px;height:30px;font-size:13px}
+.kv.big{font-size:22px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px}
+.bar{height:6px;border-radius:3px;background:var(--accent);opacity:.7;margin:2px 2px 8px}
+.tag{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.rec{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.rec:last-child{border-bottom:0}
+.rec .t{min-width:0;overflow-wrap:anywhere}
+.rec .s{color:var(--sub);font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.check{display:flex;align-items:center;gap:8px;margin-top:16px;color:var(--sub);font-size:14px}
+.seg{display:flex;gap:10px;margin-top:16px}
+.seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--line);border-radius:12px;padding:8px;opacity:.5}
+.seg button.on{opacity:1;border-color:#8a7a76}
+.seg .av{width:30px;height:30px;font-size:13px}
 </style>
 </head>
 <body>
@@ -89,6 +112,14 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="head"><h2 id="listTitle">支払い一覧</h2><button class="link" id="toggleSettled"></button></div>
     <div id="list"></div>
   </div>
+</section>
+
+<!-- 月ごと -->
+<section id="v-month" class="hidden">
+  <div class="mhead"><button id="mPrev" aria-label="前の月">‹ 前の月</button><b id="mTitle"></b><button id="mNext" aria-label="次の月">次の月 ›</button></div>
+  <div class="card" id="mSum"></div>
+  <div class="card"><div class="head"><h2>費用ごと</h2></div><div id="mCat"></div></div>
+  <div class="card"><div class="head"><h2>この月の支払い</h2></div><div id="mList"></div></div>
 </section>
 
 <!-- 登録 -->
@@ -125,9 +156,23 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="actions" style="margin-top:20px"><button class="btn" id="saveSet">保存</button></div>
   </div>
   <div class="card">
+    <div class="head"><h2>毎月の決まった支払い</h2></div>
+    <p class="muted">家賃など。毎月その日になると、支払い一覧に自動で1件入ります。</p>
+    <div id="recList"></div>
+    <label class="field"><span>なんの費用か</span><input id="r-title" maxlength="30" placeholder="例：家賃"></label>
+    <div class="two"><label class="field"><span>金額</span><input id="r-amount" inputmode="numeric" placeholder="0"></label><label class="field"><span>毎月の日（1〜28）</span><input id="r-day" inputmode="numeric" placeholder="25"></label></div>
+    <div class="label" style="margin-top:18px">払う人</div>
+    <div class="seg"><button type="button" id="r-pa"></button><button type="button" id="r-pb"></button></div>
+    <div class="ratio"><span>負担する割合</span><b id="r-ratioTxt">50 : 50</b></div>
+    <input type="range" id="r-ratio" min="0" max="100" step="5" value="50">
+    <label class="check"><input type="checkbox" id="r-now">今月の分も入れる（もう手で登録していれば外す）</label>
+    <div class="err" id="r-err"></div>
+    <div class="actions"><button class="btn ghost" id="r-add">毎月の支払いに足す</button></div>
+  </div>
+  <div class="card">
     <div class="head"><h2>記録の置き場</h2></div>
     <label class="field"><span>Google の受け口の URL</span><input id="s-api" placeholder="https://script.google.com/macros/s/.../exec"></label>
-    <p class="muted">ここに受け口の URL が入っていると、2人のスマホで同じ記録を見られます。空のままだと、このスマホの中だけに記録します。</p>
+    <p class="muted">2人の記録は、この受け口を通して Google スプレッドシートに入ります。空のまま保存すると、アプリに入っている受け口を使います。</p>
     <div class="actions"><button class="btn ghost" id="saveApi">URL を保存</button></div>
   </div>
 </section>
@@ -135,6 +180,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
 <nav>
   <button id="n-list" class="on" aria-label="一覧"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h2v2H4zm4 0h12v2H8zM4 11h2v2H4zm4 0h12v2H8zm-4 5h2v2H4zm4 0h12v2H8z"/></svg></button>
+  <button id="n-month" aria-label="月ごと"><svg class="icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14zM7 11h4v3H7zm6 0h4v3h-4zm-6 5h4v2H7z"/></svg></button>
   <button id="n-add" aria-label="追加"><svg class="icon" viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg></button>
   <button id="n-set" aria-label="設定"><svg class="icon" viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
 </nav>
@@ -200,7 +246,9 @@ function ask(t){return new Promise(res=>{$('mText').textContent=t;$('modal').cla
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const titles=()=>(D.settings.titles||'飲み代、ごはん、家賃、病院、日用品、交通費').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
 
-function view(v){['list','edit','set'].forEach(k=>$('v-'+k).classList.toggle('hidden',k!==v));$('n-list').classList.toggle('on',v==='list');$('n-add').classList.toggle('on',v==='edit');$('n-set').classList.toggle('on',v==='set');window.scrollTo(0,0)}
+function view(v){['list','month','edit','set'].forEach(k=>$('v-'+k).classList.toggle('hidden',k!==v));$('n-list').classList.toggle('on',v==='list');$('n-month').classList.toggle('on',v==='month');$('n-add').classList.toggle('on',v==='edit');$('n-set').classList.toggle('on',v==='set');window.scrollTo(0,0)}
+// 貸し借りの向きと額を「Aから Bに ¥」の形にする（0 なら空）
+function flowHtml(n){if(!n)return '<small>貸し借りなし</small>';const f=n>0?'B':'A',t=n>0?'A':'B';return `${av(f)}<small>から</small>${av(t)}<small>に</small>${yen(Math.abs(n))}`}
 
 function renderList(){
   const live=D.payments.filter(p=>!p.deletedAt);
@@ -208,18 +256,69 @@ function renderList(){
   const n=net(open);
   if(n===0){$('sum').innerHTML='<small>精算するものはありません</small>';$('settleBtn').disabled=true}
   else{const f=n>0?'B':'A',t=n>0?'A':'B';$('sum').innerHTML=`${av(f)}<small>から</small>${av(t)}<small>に</small>${yen(Math.abs(n))}`;$('settleBtn').disabled=false}
-  const items=(showSettled?live.filter(p=>p.settledAt):open).slice().sort((a,b)=>(a.date+a.createdAt)<(b.date+b.createdAt)?-1:1);
+  const byDate=(a,b)=>(a.date+a.createdAt)<(b.date+b.createdAt)?-1:1;
+  // 精算済みは、新しい精算から順に、精算ごとにまとめて並べる
+  const items=showSettled?live.filter(p=>p.settledAt).sort((a,b)=>a.settledAt!==b.settledAt?(a.settledAt<b.settledAt?1:-1):byDate(a,b)):open.slice().sort(byDate);
   $('listTitle').textContent=showSettled?'精算済み一覧':'支払い一覧';
   $('toggleSettled').innerHTML=showSettled?'支払い一覧へ ›':'精算済み一覧へ ›';
   if(!items.length){$('list').innerHTML='<div class="empty">'+(showSettled?'精算済みの支払いはありません':'下の＋から支払いを登録してください')+'</div>';return}
   let h='',last='',lastSet='';
   items.forEach(p=>{
-    if(showSettled&&p.settledAt!==lastSet){lastSet=p.settledAt;h+=`<div class="date">${esc(p.settledAt.slice(0,10).replace(/-/g,'/'))} に精算 <button class="link" data-unsettle="${esc(p.settledAt)}">取り消す</button></div>`;last=''}
+    if(showSettled&&p.settledAt!==lastSet){lastSet=p.settledAt;const g=items.filter(x=>x.settledAt===p.settledAt);h+=`<div class="date">${esc(p.settledAt.slice(0,10).replace(/-/g,'/'))} に精算 <button class="link" data-unsettle="${esc(p.settledAt)}">取り消す</button></div><div class="setsum">${flowHtml(net(g))}<small>（${g.length}件）</small></div>`;last=''}
     if(p.date!==last){last=p.date;h+=`<div class="date">${esc(p.date.replace(/-/g,'/'))}</div>`}
-    h+=`<div class="row" data-id="${esc(p.id)}"><span class="t">${esc(p.title||'（費用名なし）')}</span>${av(p.payer)}<span class="m">${yen(p.amount)}</span></div>`;
+    h+=rowHtml(p);
   });
   $('list').innerHTML=h;
 }
+function rowHtml(p,mark){return `<div class="row" data-id="${esc(p.id)}"><span class="t">${esc(p.title||'（費用名なし）')}${mark&&p.settledAt?'<span class="tag">精算済み</span>':''}</span>${av(p.payer)}<span class="m">${yen(p.amount)}</span></div>`}
+
+// ===== 月ごと =====
+// 支払いの日付の月で分ける（精算済みも入れる・消した物は入れない）
+let month=today().slice(0,7);
+const addMonth=(m,k)=>{let [y,mo]=m.split('-').map(Number);mo+=k;while(mo>12){mo-=12;y++}while(mo<1){mo+=12;y--}return y+'-'+String(mo).padStart(2,'0')};
+function renderMonth(){
+  const [y,mo]=month.split('-');$('mTitle').textContent=`${y}年${Number(mo)}月`;
+  $('mNext').disabled=month>=today().slice(0,7);
+  const ps=D.payments.filter(p=>!p.deletedAt&&String(p.date).slice(0,7)===month).sort((a,b)=>(a.date+a.createdAt)<(b.date+b.createdAt)?-1:1);
+  const total=ps.reduce((t,p)=>t+p.amount,0);
+  const paid=k=>ps.filter(p=>p.payer===k).reduce((t,p)=>t+p.amount,0);
+  // 負担した額＝払った額 − 相手に返してもらう額 ＋ 相手に返す額（端数は一覧の計算と同じ）
+  const share=k=>ps.reduce((t,p)=>{const o=owe(p);return t+(p.payer===k?p.amount-o.v:o.v)},0);
+  $('mSum').innerHTML=`<div class="kv big"><span>合計</span><span>${yen(total)}</span></div>`+
+    ['A','B'].map(k=>`<div class="kv"><span class="who">${av(k)}${esc(nm(k))}</span><span><small class="muted">払った </small>${yen(paid(k))}<small class="muted">　負担 </small>${yen(share(k))}</span></div>`).join('')+
+    `<div class="setsum" style="margin-top:8px"><small>この月の分だけで見ると</small>${flowHtml(net(ps))}</div>`;
+  const cat={};ps.forEach(p=>{const t=p.title||'（費用名なし）';cat[t]=(cat[t]||0)+p.amount});
+  const cs=Object.entries(cat).sort((a,b)=>b[1]-a[1]);
+  $('mCat').innerHTML=cs.length?cs.map(([t,v])=>`<div class="kv"><span class="t">${esc(t)}</span><span>${yen(v)}</span></div><div class="bar" style="width:${Math.max(2,Math.round(v/cs[0][1]*100))}%"></div>`).join(''):'<div class="empty">この月の支払いはありません</div>';
+  let h='',last='';ps.forEach(p=>{if(p.date!==last){last=p.date;h+=`<div class="date">${esc(p.date.replace(/-/g,'/'))}</div>`}h+=rowHtml(p,true)});
+  $('mList').innerHTML=h||'<div class="empty">この月の支払いはありません</div>';
+}
+
+// ===== 毎月の決まった支払い =====
+// 設定の recurring に [{id,title,amount,payer,ratioA,day,start}] を入れる。開いた時に、その日を過ぎた月の分が無ければ足す
+// 足す支払いの id は rec-<id>-<YYYY-MM>＝2人が同時に開いても1件・消した月はもう足さない（消した印が残るため）
+const okRec=r=>r&&/^[a-z0-9]{1,24}$/.test(r.id)&&Number(r.amount)>0&&(r.payer==='A'||r.payer==='B')&&Number(r.day)>=1&&Number(r.day)<=28&&/^\d{4}-\d{2}$/.test(r.start);
+function recs(){try{const a=JSON.parse(D.settings.recurring||'[]');return Array.isArray(a)?a.filter(okRec):[]}catch(e){return []}}
+async function autoRec(){
+  const t=today(),now=t.slice(0,7),have=new Set(D.payments.map(p=>p.id));let added=0;
+  for(const r of recs()){
+    let m=r.start<addMonth(now,-12)?addMonth(now,-12):r.start; // さかのぼるのは12か月まで
+    for(;m<=now;m=addMonth(m,1)){
+      const id=`rec-${r.id}-${m}`,date=`${m}-${String(r.day).padStart(2,'0')}`;
+      if(date>t||have.has(id))continue;
+      try{await store.send({action:'add',p:{id,date,payer:r.payer,amount:Number(r.amount),ratioA:Number(r.ratioA),title:String(r.title||'').slice(0,30)}});have.add(id);added++}catch(e){}
+    }
+  }
+  return added;
+}
+let rPayer='A';
+function renderRec(){
+  const a=recs();
+  $('recList').innerHTML=a.length?a.map(r=>`<div class="rec"><span class="t">${esc(r.title||'（費用名なし）')}<br><span class="s">毎月${Number(r.day)}日・${esc(nm(r.payer))}が払う・<span style="white-space:nowrap">${Number(r.ratioA)} : ${100-Number(r.ratioA)}</span></span></span><span>${yen(r.amount)}</span><button class="link" data-rmrec="${esc(r.id)}">外す</button></div>`).join(''):'<div class="empty" style="padding:8px 0">まだありません</div>';
+  ['A','B'].forEach(k=>{const b=$('r-p'+k.toLowerCase());b.innerHTML=`${av(k)}${esc(nm(k))}`;b.classList.toggle('on',rPayer===k)});
+  const v=Number($('r-ratio').value);$('r-ratioTxt').textContent=`${v} : ${100-v}`;
+}
+async function saveRecs(a){await store.send({action:'saveSettings',s:{recurring:JSON.stringify(a)}});D.settings.recurring=JSON.stringify(a)}
 
 function openEdit(p){
   editing=p||null; payer=p?p.payer:'A';
@@ -244,12 +343,32 @@ function paintEdit(){
   $('preview').innerHTML=o.v?`${av(o.from)}から${av(o.to)}に ${yen(o.v)}`:'<span class="muted">貸し借りは出ません</span>';
 }
 
-async function refresh(){try{D=await store.load();D.settings=D.settings||{};D.payments=(D.payments||[]).map(p=>({...p,payer:who(p.payer),amount:Number(p.amount)||0,ratioA:Math.min(100,Math.max(0,Number(p.ratioA)||0))}))}catch(e){toast('読み込めませんでした。電波を確かめてください')}renderList()}
+async function load(){D=await store.load();D.settings=D.settings||{};D.payments=(D.payments||[]).map(p=>({...p,payer:who(p.payer),amount:Number(p.amount)||0,ratioA:Math.min(100,Math.max(0,Number(p.ratioA)||0))}))}
+async function refresh(){try{await load();if(await autoRec())await load()}catch(e){toast('読み込めませんでした。電波を確かめてください')}renderList();if(!$('v-month').classList.contains('hidden'))renderMonth()}
 
 // ===== 操作 =====
 $('n-list').onclick=()=>{view('list');refresh()};
 $('n-add').onclick=()=>openEdit(null);
-$('n-set').onclick=()=>{paintAv($('pvA'),'A');paintAv($('pvB'),'B');$('s-a').value=D.settings.nameA||'';$('s-b').value=D.settings.nameB||'';$('s-titles').value=titles().join('、');$('s-api').value=store.api();view('set')};
+$('n-month').onclick=()=>{month=today().slice(0,7);renderMonth();view('month')};
+$('mPrev').onclick=()=>{month=addMonth(month,-1);renderMonth()};
+$('mNext').onclick=()=>{month=addMonth(month,1);renderMonth()};
+$('mList').onclick=e=>{const r=e.target.closest('.row');if(r)openEdit(D.payments.find(p=>p.id===r.dataset.id))};
+$('n-set').onclick=()=>{paintAv($('pvA'),'A');paintAv($('pvB'),'B');$('s-a').value=D.settings.nameA||'';$('s-b').value=D.settings.nameB||'';$('s-titles').value=titles().join('、');$('s-api').value=store.api();renderRec();view('set')};
+$('r-pa').onclick=()=>{rPayer='A';renderRec()};$('r-pb').onclick=()=>{rPayer='B';renderRec()};
+$('r-ratio').oninput=renderRec;
+$('r-amount').oninput=e=>{const v=e.target.value.replace(/[^\d]/g,'');e.target.value=v?Number(v).toLocaleString('ja-JP'):''};
+$('r-add').onclick=async()=>{
+  const amt=Number($('r-amount').value.replace(/[^\d]/g,'')),day=Number($('r-day').value.replace(/[^\d]/g,'')),title=$('r-title').value.trim();
+  if(!title){$('r-err').textContent='費用名を入れてください';return}
+  if(!(amt>0)){$('r-err').textContent='金額を入れてください';return}
+  if(!(day>=1&&day<=28)){$('r-err').textContent='日は1〜28で入れてください';return}
+  const now=today().slice(0,7),r={id:Date.now().toString(36),title,amount:amt,payer:rPayer,ratioA:Number($('r-ratio').value),day,start:$('r-now').checked?now:addMonth(now,1)};
+  if(!await ask(`「${title}」${yen(amt)} を、毎月${day}日に入れますか？（${r.start.replace('-','年')}月の分から）`))return;
+  $('r-err').textContent='';
+  try{await saveRecs([...recs(),r]);['r-title','r-amount','r-day'].forEach(k=>$(k).value='');$('r-now').checked=false;toast('足しました');await refresh();renderRec()}catch(e){$('r-err').textContent='保存できませんでした'}
+};
+$('recList').onclick=async e=>{const b=e.target.closest('[data-rmrec]');if(!b)return;if(!await ask('この毎月の支払いを外しますか？（もう入った分はそのまま残ります）'))return;
+  try{await saveRecs(recs().filter(r=>r.id!==b.dataset.rmrec));renderRec();toast('外しました')}catch(_){toast('外せませんでした')}};
 $('back').onclick=()=>view('list');
 $('p-a').onclick=()=>{payer='A';paintEdit()};$('p-b').onclick=()=>{payer='B';paintEdit()};
 $('f-ratio').oninput=paintEdit;

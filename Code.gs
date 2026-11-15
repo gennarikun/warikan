@@ -18,6 +18,15 @@ function settings_() {
   rows_(sh).list.forEach(r => { if (r.key) o[r.key] = String(r.value); });
   return o;
 }
+// 文字は先頭に ' を付けて入れる（「=」で始まる名前や費用名を計算式にさせない・日付に変えさせない）
+function txt_(v) { v = String(v === undefined || v === null ? '' : v); return v === '' ? '' : "'" + v; }
+// 毎月の決まった支払い：決まった形の物だけ残す
+function recurring_(v) {
+  let a; try { a = JSON.parse(v); } catch (e) { return null; }
+  if (!Array.isArray(a)) return null;
+  return JSON.stringify(a.slice(0, 20).filter(r => r && /^[a-z0-9]{1,24}$/.test(r.id) && Number(r.amount) > 0 && (r.payer === 'A' || r.payer === 'B') && Number(r.day) >= 1 && Number(r.day) <= 28 && /^\d{4}-\d{2}$/.test(r.start))
+    .map(r => ({ id: r.id, title: String(r.title || '').slice(0, 30), amount: Math.round(Number(r.amount)), payer: r.payer, ratioA: Math.min(100, Math.max(0, Number(r.ratioA) || 0)), day: Math.round(Number(r.day)), start: r.start })));
+}
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
 function doGet() {
@@ -39,10 +48,10 @@ function doPost(e) {
       const hit = r.list.find(x => x.id === p.id);  // 同じ id は上書き＝2回届いても1件
       if (hit) {
         if (hit.settledAt) return out_({ ok: false, error: '精算済みは直せません' });
-        ['date','payer','amount','ratioA','title'].forEach(c => sh.getRange(hit._row, col(c)).setValue(c === 'date' ? "'" + p[c] : p[c]));
+        ['date','payer','amount','ratioA','title'].forEach(c => sh.getRange(hit._row, col(c)).setValue(c === 'date' || c === 'title' ? txt_(p[c]) : p[c]));
         sh.getRange(hit._row, col('updatedAt')).setValue(now);
       } else {
-        sh.appendRow(PCOLS.map(c => c === 'date' ? "'" + p.date : c === 'createdAt' || c === 'updatedAt' ? now : (p[c] === undefined ? '' : p[c])));
+        sh.appendRow(PCOLS.map(c => c === 'date' || c === 'title' || c === 'id' ? txt_(p[c]) : c === 'createdAt' || c === 'updatedAt' ? now : (p[c] === undefined ? '' : p[c])));
       }
     } else if (b.action === 'delete') {
       const hit = r.list.find(x => x.id === b.id); if (hit && !hit.settledAt) sh.getRange(hit._row, col('deletedAt')).setValue(now);
@@ -52,8 +61,11 @@ function doPost(e) {
       r.list.forEach(x => { if (String(x.settledAt) === String(b.at)) sh.getRange(x._row, col('settledAt')).setValue(''); });
     } else if (b.action === 'saveSettings') {
       const s = sheet_('settings', ['key','value']); const sr = rows_(s);
-      const ok = { nameA: 1, nameB: 1, titles: 1, imgA: 1, imgB: 1 };
-      Object.keys(b.s || {}).forEach(k => { if (!ok[k]) return; if ((k === 'imgA' || k === 'imgB') && b.s[k] && !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(b.s[k])) return; if (String(b.s[k]).length > 45000) return; const hit = sr.list.find(x => x.key === k); if (hit) s.getRange(hit._row, 2).setValue(b.s[k]); else s.appendRow([k, b.s[k]]); });
+      const ok = { nameA: 1, nameB: 1, titles: 1, imgA: 1, imgB: 1, recurring: 1 };
+      Object.keys(b.s || {}).forEach(k => { if (!ok[k]) return; let v = String(b.s[k] === undefined || b.s[k] === null ? '' : b.s[k]);
+        if ((k === 'imgA' || k === 'imgB') && v && !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v)) return;
+        if (k === 'recurring') { v = recurring_(v); if (v === null) return; }
+        if (v.length > 45000) return; const hit = sr.list.find(x => x.key === k); if (hit) s.getRange(hit._row, 2).setValue(txt_(v)); else s.appendRow([k, txt_(v)]); });
     } else return out_({ ok: false, error: '知らない操作です' });
     return out_({ ok: true });
   } finally { lock.releaseLock(); }
