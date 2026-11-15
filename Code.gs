@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 // ふたりの割り勘：記録の置き場（Google スプレッドシートに付ける Apps Script）2026-11-15
 // 表「payments」と「settings」を使う。列は見出しの名前で読む（並びに頼らない）
 const PCOLS = ['id','date','payer','amount','ratioA','title','createdAt','updatedAt','settledAt','deletedAt'];
