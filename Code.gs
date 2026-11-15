@@ -32,6 +32,9 @@ function doPost(e) {
     const sh = sheet_('payments', PCOLS); const r = rows_(sh); const col = c => r.head.indexOf(c) + 1;
     if (b.action === 'add' || b.action === 'update') {
       const p = b.p; if (!p || !p.id || !(Number(p.amount) > 0)) return out_({ ok: false, error: '金額が正しくありません' });
+      if (p.payer !== 'A' && p.payer !== 'B') return out_({ ok: false, error: '払った人が正しくありません' });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.date))) return out_({ ok: false, error: '日付が正しくありません' });
+      p.ratioA = Math.min(100, Math.max(0, Number(p.ratioA) || 0)); p.amount = Math.round(Number(p.amount)); p.title = String(p.title || '').slice(0, 60);
       const hit = r.list.find(x => x.id === p.id);  // 同じ id は上書き＝2回届いても1件
       if (hit) {
         if (hit.settledAt) return out_({ ok: false, error: '精算済みは直せません' });
@@ -48,7 +51,8 @@ function doPost(e) {
       r.list.forEach(x => { if (String(x.settledAt) === String(b.at)) sh.getRange(x._row, col('settledAt')).setValue(''); });
     } else if (b.action === 'saveSettings') {
       const s = sheet_('settings', ['key','value']); const sr = rows_(s);
-      Object.keys(b.s || {}).forEach(k => { const hit = sr.list.find(x => x.key === k); if (hit) s.getRange(hit._row, 2).setValue(b.s[k]); else s.appendRow([k, b.s[k]]); });
+      const ok = { nameA: 1, nameB: 1, titles: 1, imgA: 1, imgB: 1 };
+      Object.keys(b.s || {}).forEach(k => { if (!ok[k]) return; if ((k === 'imgA' || k === 'imgB') && b.s[k] && !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(b.s[k])) return; if (String(b.s[k]).length > 45000) return; const hit = sr.list.find(x => x.key === k); if (hit) s.getRange(hit._row, 2).setValue(b.s[k]); else s.appendRow([k, b.s[k]]); });
     } else return out_({ ok: false, error: '知らない操作です' });
     return out_({ ok: true });
   } finally { lock.releaseLock(); }
