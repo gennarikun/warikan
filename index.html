@@ -145,8 +145,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <script>
 // ===== 記録の置き場：Google の受け口（Apps Script）か、このスマホの中（localStorage） =====
 const LS_DATA='warikan.data', LS_API='warikan.api';
+// 受け口の URL はアプリに書いておく（開き方ごとに貼り直さないで済むように・2026-11-15 オーナー「Yes」）。設定で貼った URL があればそちらを使う
+const API_DEFAULT='https://script.google.com/macros/s/AKfycbz2wjQjVeJbHn7FBDU4riHWOuliJq-9ewFhPlkbbp1v_QF1_j_XNKR0lcHbDM0JDouF/exec';
 const store={
-  api(){try{return localStorage.getItem(LS_API)||''}catch(e){return ''}},
+  api(){try{return localStorage.getItem(LS_API)||API_DEFAULT}catch(e){return API_DEFAULT}},
   setApi(u){try{localStorage.setItem(LS_API,u)}catch(e){}},
   local(){try{return JSON.parse(localStorage.getItem(LS_DATA))||{payments:[],settings:{}}}catch(e){return {payments:[],settings:{}}}},
   saveLocal(d){localStorage.setItem(LS_DATA,JSON.stringify(d))},
