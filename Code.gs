@@ -55,6 +55,8 @@ function doPost(e) {
       }
     } else if (b.action === 'delete') {
       const hit = r.list.find(x => x.id === b.id); if (hit && !hit.settledAt) sh.getRange(hit._row, col('deletedAt')).setValue(now);
+    } else if (b.action === 'restore') {  // 消した支払いを戻す（精算済みは触らない）
+      const hit = r.list.find(x => x.id === b.id); if (hit && !hit.settledAt) sh.getRange(hit._row, col('deletedAt')).setValue('');
     } else if (b.action === 'settle') {
       r.list.forEach(x => { if (!x.settledAt && !x.deletedAt) sh.getRange(x._row, col('settledAt')).setValue("'" + b.at); });
     } else if (b.action === 'unsettle') {

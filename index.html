@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>ふたりの割り勘</title>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <style>
 :root{--bg:#1e1a19;--card:#26222a;--line:#3a3438;--text:#f3eeec;--sub:#a9a0a0;--accent:#f0704d;--accent-ink:#2a1610;--a:#f2c94c;--b:#7cc96b;--danger:#e5534b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -66,6 +67,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .err{color:var(--danger);font-size:14px;min-height:20px;margin-top:8px;text-align:center}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#3b3436;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.2s;pointer-events:none}
 .toast.show{opacity:1}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:14px}
+.toast button{color:var(--accent);font-weight:700}
+.sync{position:fixed;top:calc(8px + env(safe-area-inset-top));right:12px;background:#3b3436;color:var(--sub);font-size:12px;padding:4px 10px;border-radius:999px;z-index:5}
+.sync:empty{display:none}
+.modal input[type=date]{width:100%;margin:0 0 16px;background:none;border:1.5px solid #8a7a76;border-radius:10px;padding:10px;font-size:17px;color-scheme:dark}
 .set .field{margin-top:22px}
 .muted{color:var(--sub);font-size:13px;line-height:1.6}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:20px}
@@ -99,6 +105,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--line);border-radius:12px;padding:8px;opacity:.5}
 .seg button.on{opacity:1;border-color:#8a7a76}
 .seg .av{width:30px;height:30px;font-size:13px}
+.seg button{min-width:0;font-size:14px}
+.seg button span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -172,6 +180,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="actions"><button class="btn ghost" id="r-add">毎月の支払いに足す</button></div>
   </div>
   <div class="card">
+    <div class="head"><h2>消した支払い</h2></div>
+    <p class="muted">間違えて消した時は、ここから戻せます（新しく消した順に20件まで）。</p>
+    <div id="delList"></div>
+  </div>
+  <div class="card">
     <div class="head"><h2>記録の置き場</h2></div>
     <label class="field"><span>Google の受け口の URL</span><input id="s-api" placeholder="https://script.google.com/macros/s/.../exec"></label>
     <p class="muted">2人の記録は、この受け口を通して Google スプレッドシートに入ります。空のまま保存すると、アプリに入っている受け口を使います。</p>
@@ -187,12 +200,22 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   <button id="n-set" aria-label="設定"><svg class="icon" viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
 </nav>
 
-<div class="modal" id="modal"><div class="box"><p id="mText"></p><div class="actions"><button class="btn ghost" id="mNo">やめる</button><button class="btn" id="mYes">はい</button></div></div></div>
+<div class="modal" id="modal"><div class="box"><p id="mText"></p><input type="date" id="mDate" class="hidden" aria-label="精算した日"><div class="actions"><button class="btn ghost" id="mNo">やめる</button><button class="btn" id="mYes">はい</button></div></div></div>
 <div class="toast" id="toast"></div>
+<div class="sync" id="sync"></div>
 
 <script>
 // ===== 記録の置き場：Google の受け口（Apps Script）か、このスマホの中（localStorage） =====
-const LS_DATA='warikan.data', LS_API='warikan.api';
+const LS_DATA='warikan.data', LS_API='warikan.api', LS_CACHE='warikan.cache', LS_Q='warikan.queue';
+// 変更を記録の入れ物に当てはめる（このスマホの中だけで使う時・画面に先に出す時・未送信の分を重ねる時に使う）
+function applyOp(d,body){const now=new Date().toISOString();
+  if(body.action==='add'||body.action==='update'){const i=d.payments.findIndex(p=>p.id===body.p.id); const p={...body.p,updatedAt:now}; if(i<0){p.createdAt=now;p.settledAt='';p.deletedAt='';d.payments.push(p)}else d.payments[i]={...d.payments[i],...p}}
+  if(body.action==='delete'){const p=d.payments.find(p=>p.id===body.id); if(p&&!p.settledAt)p.deletedAt=now}
+  if(body.action==='restore'){const p=d.payments.find(p=>p.id===body.id); if(p&&!p.settledAt)p.deletedAt=''}
+  if(body.action==='settle'){d.payments.forEach(p=>{if(!p.settledAt&&!p.deletedAt)p.settledAt=body.at})}
+  if(body.action==='unsettle'){d.payments.forEach(p=>{if(p.settledAt===body.at)p.settledAt=''})}
+  if(body.action==='saveSettings'){d.settings={...d.settings,...body.s}}
+  return d}
 // 受け口の URL はアプリに書いておく（開き方ごとに貼り直さないで済むように・2026-11-15 オーナー「Yes」）。設定で貼った URL があればそちらを使う
 const API_DEFAULT='https://script.google.com/macros/s/AKfycbz2wjQjVeJbHn7FBDU4riHWOuliJq-9ewFhPlkbbp1v_QF1_j_XNKR0lcHbDM0JDouF/exec';
 const store={
@@ -203,22 +226,17 @@ const store={
   async load(){
     const u=this.api();
     if(!u) return this.local();
-    const r=await fetch(u+'?action=list',{cache:'no-store'});
+    let r; try{r=await fetch(u+'?action=list',{cache:'no-store'})}catch(e){throw Object.assign(new Error('電波がありません'),{net:true})}
     if(!r.ok) throw new Error('読み込めませんでした');
     return await r.json();
   },
   async send(body){
     const u=this.api();
     if(!u){ // このスマホの中だけで同じ動きをする
-      const d=this.local(); const now=new Date().toISOString();
-      if(body.action==='add'||body.action==='update'){const i=d.payments.findIndex(p=>p.id===body.p.id); const p={...body.p,updatedAt:now}; if(i<0){p.createdAt=now;d.payments.push(p)}else d.payments[i]={...d.payments[i],...p}}
-      if(body.action==='delete'){const p=d.payments.find(p=>p.id===body.id); if(p)p.deletedAt=now}
-      if(body.action==='settle'){d.payments.forEach(p=>{if(!p.settledAt&&!p.deletedAt)p.settledAt=body.at})}
-      if(body.action==='unsettle'){d.payments.forEach(p=>{if(p.settledAt===body.at)p.settledAt=''})}
-      if(body.action==='saveSettings'){d.settings={...d.settings,...body.s}}
-      this.saveLocal(d); return {ok:true};
+      this.saveLocal(applyOp(this.local(),body)); return {ok:true};
     }
-    const r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
+    // 届かなかった（電波が無い）時は net の印を付ける＝あとで送り直してよい。受け口が断った時は印を付けない
+    let r; try{r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})}catch(e){throw Object.assign(new Error('電波がありません'),{net:true})}
     const j=await r.json(); if(!j.ok) throw new Error(j.error||'保存できませんでした'); return j;
   }
 };
@@ -243,8 +261,13 @@ const av=k=>{k=who(k);return `<span class="av ${k.toLowerCase()}${avStyle(k)}">$
 // 画像の丸（設定・登録の画面の大きい丸）に名前の1文字目か画像を入れる
 function paintAv(el,k){el.className='av '+k.toLowerCase()+(img(k)?' img':'');el.style.backgroundImage=img(k)?`url('${img(k)}')`:'';el.textContent=img(k)?'':nm(k).slice(0,1)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1800)}
-function ask(t){return new Promise(res=>{$('mText').textContent=t;$('modal').classList.add('show');$('mYes').onclick=()=>{$('modal').classList.remove('show');res(true)};$('mNo').onclick=()=>{$('modal').classList.remove('show');res(false)}})}
+let toastT;
+function toast(t,act){const e=$('toast');clearTimeout(toastT);e.textContent=t;e.classList.toggle('act',!!act);
+  if(act){const b=document.createElement('button');b.textContent=act[0];b.onclick=()=>{e.classList.remove('show','act');act[1]()};e.appendChild(b)}
+  e.classList.add('show');toastT=setTimeout(()=>e.classList.remove('show','act'),act?5000:1800)}
+// withDate＝精算した日を選ばせる（はい→選んだ日、やめる→false）
+function ask(t,withDate){return new Promise(res=>{$('mText').textContent=t;const md=$('mDate');md.classList.toggle('hidden',!withDate);if(withDate){md.value=today();md.max=today()}
+  $('modal').classList.add('show');$('mYes').onclick=()=>{$('modal').classList.remove('show');res(withDate?(/^\d{4}-\d{2}-\d{2}$/.test(md.value)?md.value:today()):true)};$('mNo').onclick=()=>{$('modal').classList.remove('show');res(false)}})}
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const titles=()=>(D.settings.titles||'飲み代、ごはん、家賃、病院、日用品、交通費').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
 
@@ -313,16 +336,23 @@ async function autoRec(){
   }
   return added;
 }
+function renderDeleted(){
+  const a=D.payments.filter(p=>p.deletedAt&&!p.settledAt).sort((x,y)=>String(x.deletedAt)<String(y.deletedAt)?1:-1).slice(0,20);
+  $('delList').innerHTML=a.length?a.map(p=>`<div class="rec"><span class="t">${esc(p.title||'（費用名なし）')}<br><span class="s">${esc(String(p.date).replace(/-/g,'/'))}・${esc(nm(p.payer))}が払った</span></span><span>${yen(p.amount)}</span><button class="link" data-restore="${esc(p.id)}">戻す</button></div>`).join(''):'<div class="empty" style="padding:8px 0">ありません</div>';
+}
 let rPayer='A';
 function renderRec(){
   const a=recs();
   $('recList').innerHTML=a.length?a.map(r=>`<div class="rec"><span class="t">${esc(r.title||'（費用名なし）')}<br><span class="s">毎月${Number(r.day)}日・${esc(nm(r.payer))}が払う・<span style="white-space:nowrap">${Number(r.ratioA)} : ${100-Number(r.ratioA)}</span></span></span><span>${yen(r.amount)}</span><button class="link" data-rmrec="${esc(r.id)}">外す</button></div>`).join(''):'<div class="empty" style="padding:8px 0">まだありません</div>';
-  ['A','B'].forEach(k=>{const b=$('r-p'+k.toLowerCase());b.innerHTML=`${av(k)}${esc(nm(k))}`;b.classList.toggle('on',rPayer===k)});
+  ['A','B'].forEach(k=>{const b=$('r-p'+k.toLowerCase());b.innerHTML=`${av(k)}<span>${esc(nm(k))}</span>`;b.classList.toggle('on',rPayer===k)});
   const v=Number($('r-ratio').value);$('r-ratioTxt').textContent=`${v} : ${100-v}`;
 }
 async function saveRecs(a){await store.send({action:'saveSettings',s:{recurring:JSON.stringify(a)}});D.settings.recurring=JSON.stringify(a)}
 
-function openEdit(p){
+let backTo='list';
+function goBack(){view(backTo);if(backTo==='month')renderMonth();else renderList()}
+function openEdit(p,from){
+  backTo=from||'list';
   editing=p||null; payer=p?p.payer:'A';
   $('f-date').value=p?p.date:today();
   $('f-ratio').value=p?p.ratioA:50;
@@ -335,6 +365,8 @@ function openEdit(p){
   $('chips').innerHTML=titles().map(t=>`<button type="button">${esc(t)}</button>`).join('');
   paintEdit(); view('edit');
 }
+// 新しく登録する時、費用名を選ぶ（入れる）と、前回のその費用の割合と払った人に合わせる
+function applyLast(t){if(editing||!t)return;const last=D.payments.filter(q=>!q.deletedAt&&q.title===t).sort((a,b)=>(a.date+a.createdAt)<(b.date+b.createdAt)?1:-1)[0];if(!last)return;payer=last.payer;$('f-ratio').value=last.ratioA;paintEdit()}
 function amount(){const v=$('f-amount').value.replace(/[^\d]/g,'');return v?Number(v):0}
 function paintEdit(){
   $('p-a').classList.toggle('on',payer==='A');$('p-b').classList.toggle('on',payer==='B');
@@ -345,8 +377,28 @@ function paintEdit(){
   $('preview').innerHTML=o.v?`${av(o.from)}から${av(o.to)}に ${yen(o.v)}`:'<span class="muted">貸し借りは出ません</span>';
 }
 
-async function load(){D=await store.load();D.settings=D.settings||{};D.payments=(D.payments||[]).map(p=>({...p,payer:who(p.payer),amount:Number(p.amount)||0,ratioA:Math.min(100,Math.max(0,Number(p.ratioA)||0))}))}
-async function refresh(){try{await load();if(await autoRec())await load()}catch(e){toast('読み込めませんでした。電波を確かめてください')}renderList();if(!$('v-month').classList.contains('hidden'))renderMonth()}
+function norm(d){d=d||{};d.settings=d.settings||{};d.payments=(d.payments||[]).map(p=>({...p,payer:who(p.payer),amount:Number(p.amount)||0,ratioA:Math.min(100,Math.max(0,Number(p.ratioA)||0))}));return d}
+async function load(){D=norm(await store.load())}
+// 前回読んだ記録の控え（開いた瞬間に出す）
+const cache={get(){try{return JSON.parse(localStorage.getItem(LS_CACHE))}catch(e){return null}},set(){try{localStorage.setItem(LS_CACHE,JSON.stringify(D))}catch(e){}}};
+// 電波が無くて送れなかった登録・直す・消す・戻す（精算と設定は入れない＝あとで送ると、その間に相手が入れた分まで精算してしまうため）
+const Q={get(){try{return JSON.parse(localStorage.getItem(LS_Q))||[]}catch(e){return []}},set(a){try{localStorage.setItem(LS_Q,JSON.stringify(a))}catch(e){}}};
+let loading=0;
+function paintSync(){const n=Q.get().length;$('sync').textContent=n?`未送信 ${n}件`:(loading?'読み込み中…':'')}
+async function flush(){let q=Q.get();while(q.length){try{await store.send(q[0])}catch(e){if(e.net)return false;toast('送れなかった変更が1件ありました')}q.shift();Q.set(q);paintSync()}return true}
+function renderAll(){renderList();if(!$('v-month').classList.contains('hidden'))renderMonth();if(!$('v-set').classList.contains('hidden'))renderDeleted()}
+let busy=null,again=false;
+function refresh(){if(busy){again=true;return busy}
+  busy=(async()=>{loading++;paintSync();
+    try{const sent=await flush();await load();const q=Q.get();q.forEach(b=>applyOp(D,b));if(sent&&!q.length&&await autoRec())await load();cache.set()}
+    catch(e){toast(e.net?'電波が無いので、前回の記録を出しています':'読み込めませんでした。電波を確かめてください')}
+    finally{loading--;paintSync()}renderAll()})().finally(()=>{busy=null;if(again){again=false;refresh()}});
+  return busy}
+// 変更を先に画面へ出してから送る。電波が無ければ未送信に入れる。受け口が断ったら読み直して元に戻す
+async function write(body){applyOp(D,body);cache.set();renderAll();
+  try{await store.send(body);return true}
+  catch(e){if(e.net){Q.set([...Q.get(),body]);paintSync();toast('電波が戻ったら送ります');return true}
+    toast(e.message||'保存できませんでした');await refresh();return false}}
 
 // ===== 操作 =====
 $('n-list').onclick=()=>{view('list');refresh()};
@@ -354,8 +406,9 @@ $('n-add').onclick=()=>openEdit(null);
 $('n-month').onclick=()=>{month=today().slice(0,7);renderMonth();view('month')};
 $('mPrev').onclick=()=>{month=addMonth(month,-1);renderMonth()};
 $('mNext').onclick=()=>{month=addMonth(month,1);renderMonth()};
-$('mList').onclick=e=>{const r=e.target.closest('.row');if(r)openEdit(D.payments.find(p=>p.id===r.dataset.id))};
-$('n-set').onclick=()=>{paintAv($('pvA'),'A');paintAv($('pvB'),'B');$('s-a').value=D.settings.nameA||'';$('s-b').value=D.settings.nameB||'';$('s-titles').value=titles().join('、');$('s-api').value=store.api();renderRec();view('set')};
+$('mList').onclick=e=>{const r=e.target.closest('.row');if(r)openEdit(D.payments.find(p=>p.id===r.dataset.id),'month')};
+$('n-set').onclick=()=>{paintAv($('pvA'),'A');paintAv($('pvB'),'B');$('s-a').value=D.settings.nameA||'';$('s-b').value=D.settings.nameB||'';$('s-titles').value=titles().join('、');$('s-api').value=store.api();renderRec();renderDeleted();view('set')};
+$('delList').onclick=async e=>{const b=e.target.closest('[data-restore]');if(!b)return;if(await write({action:'restore',id:b.dataset.restore})){toast('戻しました');refresh()}};
 $('r-pa').onclick=()=>{rPayer='A';renderRec()};$('r-pb').onclick=()=>{rPayer='B';renderRec()};
 $('r-ratio').oninput=renderRec;
 $('r-amount').oninput=e=>{const v=e.target.value.replace(/[^\d]/g,'');e.target.value=v?Number(v).toLocaleString('ja-JP'):''};
@@ -371,26 +424,30 @@ $('r-add').onclick=async()=>{
 };
 $('recList').onclick=async e=>{const b=e.target.closest('[data-rmrec]');if(!b)return;if(!await ask('この毎月の支払いを外しますか？（もう入った分はそのまま残ります）'))return;
   try{await saveRecs(recs().filter(r=>r.id!==b.dataset.rmrec));renderRec();toast('外しました')}catch(_){toast('外せませんでした')}};
-$('back').onclick=()=>view('list');
+$('back').onclick=goBack;
 $('p-a').onclick=()=>{payer='A';paintEdit()};$('p-b').onclick=()=>{payer='B';paintEdit()};
 $('f-ratio').oninput=paintEdit;
 $('f-amount').oninput=e=>{const x=amount();e.target.value=x?x.toLocaleString('ja-JP'):'';paintEdit()};
-$('chips').onclick=e=>{if(e.target.tagName==='BUTTON'){$('f-title').value=e.target.textContent}};
+$('chips').onclick=e=>{if(e.target.tagName==='BUTTON'){$('f-title').value=e.target.textContent;applyLast(e.target.textContent)}};
+$('f-title').onchange=e=>applyLast(e.target.value.trim());
 $('reset').onclick=()=>openEdit(editing);
 $('save').onclick=async()=>{
   const x=amount(); if(!x){$('err').textContent='金額を入れてください';return}
   if(!$('f-date').value){$('err').textContent='日付を入れてください';return}
   const p={id:editing?editing.id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random()),date:$('f-date').value,payer,amount:x,ratioA:Number($('f-ratio').value),title:$('f-title').value.trim()};
-  $('save').disabled=true;$('err').textContent='';
-  try{await store.send({action:editing?'update':'add',p});toast('保存しました');view('list');await refresh()}
-  catch(e){$('err').textContent='保存できませんでした。もう一度押してください'}
-  finally{$('save').disabled=false}
+  // 桁の打ち間違い：同じ費用名の今までの金額より桁が多い時だけ聞く
+  const same=p.title?D.payments.filter(q=>!q.deletedAt&&q.title===p.title&&q.id!==p.id):[];
+  if(same.length){const mx=Math.max(...same.map(q=>q.amount));if(String(x).length>String(mx).length&&!await ask(`${yen(x)} で合っていますか？（「${p.title}」の今までで一番大きい額は ${yen(mx)}）`))return}
+  $('err').textContent='';goBack();toast('保存しました');
+  if(await write({action:editing?'update':'add',p}))refresh();
 };
 $('del').onclick=async()=>{if(!editing)return; if(!await ask('この支払いを消しますか？'))return;
-  try{await store.send({action:'delete',id:editing.id});toast('消しました');view('list');await refresh()}catch(e){$('err').textContent='消せませんでした'}};
+  const id=editing.id;goBack();toast('消しました',['元に戻す',async()=>{if(await write({action:'restore',id})){toast('戻しました');refresh()}}]);
+  if(await write({action:'delete',id}))refresh()};
 $('settleBtn').onclick=async()=>{const n=net(D.payments.filter(p=>!p.deletedAt&&!p.settledAt));
-  if(!await ask(`${nm(n>0?'B':'A')}から${nm(n>0?'A':'B')}に ${yen(Math.abs(n))} を払って、精算済みにしますか？`))return;
-  try{await store.send({action:'settle',at:new Date().toISOString()});toast('精算しました');await refresh()}catch(e){toast('精算できませんでした')}};
+  const d=await ask(`${nm(n>0?'B':'A')}から${nm(n>0?'A':'B')}に ${yen(Math.abs(n))} を払って、精算済みにしますか？ 精算した日：`,true);if(!d)return;
+  // 精算の印は「選んだ日＋今の時刻」（一覧の見出しは選んだ日で出る・同じ日に2回精算しても別のまとまりになる）
+  try{await store.send({action:'settle',at:d+'T'+new Date().toISOString().slice(11)});toast('精算しました');await refresh()}catch(e){toast(e.net?'電波が無いので精算できませんでした':'精算できませんでした')}};
 $('toggleSettled').onclick=()=>{showSettled=!showSettled;renderList()};
 $('list').onclick=async e=>{
   const u=e.target.closest('[data-unsettle]');
@@ -406,8 +463,10 @@ function shrink(file){return new Promise((res,rej)=>{const u=URL.createObjectURL
   $('rm'+k).onclick=async()=>{try{await store.send({action:'saveSettings',s:{['img'+k]:''}});D.settings['img'+k]='';paintAv($('pv'+k),k);renderList();toast('画像を外しました')}catch(err){toast('外せませんでした')}};
 });
 $('saveApi').onclick=async()=>{store.setApi($('s-api').value.trim());toast('URL を保存しました');await refresh();view('list')};
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('v-list').classList.contains('hidden'))refresh()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
+window.addEventListener('online',()=>refresh());
 
+{const c=cache.get();if(c){D=norm(c);Q.get().forEach(b=>applyOp(D,b));renderList()}}
 refresh();
 </script>
 </body>
